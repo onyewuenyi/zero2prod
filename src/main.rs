@@ -4,3 +4,4 @@ use zero2prod::run_actix_backend;
 async fn main() -> std::io::Result<()> {
     run_actix_backend()?.await
 }
+
