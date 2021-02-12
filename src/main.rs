@@ -7,7 +7,7 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to bind to rand port");
     
         let port = listener.local_addr().unwrap().port();
-        format!("127.0.0.1:{}", port);
+        println!("<LocalHost>:<Port>: 127.0.0.1:{}", port);
     run_actix_backend(listener)?.await
 }
 

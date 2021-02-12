@@ -16,6 +16,7 @@ name = "zero2prod"
 [dependencies]
 actix-web = "3.3.2"
 actix-rt = "1.1.1"
+serde = { version = "1", features = ["derive"]}
 
 
 [dev-dependencies]
