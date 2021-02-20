@@ -1,5 +1,6 @@
-use zero2prod::run_actix_backend;
+use zero2prod::startup::run_actix_backend;
 use std::net::TcpListener;
+mod routes;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
