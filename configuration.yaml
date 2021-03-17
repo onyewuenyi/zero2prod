@@ -1,0 +1,7 @@
+app_port: 8000
+database:
+  host: "localhost"
+  port: 5432
+  uname: "charlesonyewuenyi"
+  password: "password"
+  database_name: "newsletter"
