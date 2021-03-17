@@ -1,7 +1,7 @@
 use std::net::TcpListener;
 use zero2prod::startup::run_actix_backend;
-use zero2prod::configuration::get_configuration;
-use sqlx::PgPool;
+use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 // if there is a type in .header("Content-Type", "application/x-www-form-urlencoded") it will fail with no debug hint
 
@@ -14,9 +14,16 @@ struct TestApp {
 // We are also running tests, so it is not worth it to propagate errors: // if we fail to perform the required setup we can just panic and crash // all the things.
 async fn spawn_app() -> TestApp {
     // TODO spin up new DB with rand name
-    let config = get_configuration().expect("Failed to read configuration.");
-    config.database.database_name = Uuid
-    let connection_pool = PgPool::connect(&config.database.conn_str()).await.expect("Failed to connect to Postgres DB.");
+    let mut config = get_configuration().expect("Failed to read configuration.");
+
+   // set db name to be used in unit test to a uniq id
+    config.database.database_name = Uuid::new_v4().to_string();
+
+    
+ 
+    let connection_pool = configure_database(&config.database).await;
+    
+    
     let local_host = "127.0.0.1";
     let listener = TcpListener::bind(format!("{}:0", local_host)).expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
@@ -31,7 +38,26 @@ async fn spawn_app() -> TestApp {
     TestApp { address: address, db_pool: connection_pool}
 }
 
- 
+pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    // TODO NEXT TIME: refractor conn pool to a seperate configure_database
+    // Create DB
+
+    let mut connection = PgConnection::connect(&config.conn_str_without_db())
+        .await
+        .expect("Failed to connect to Postgres");
+    
+        connection
+            .execute(&*format!(r#"CREATE DATABASE "{};"#, config.database_name))
+            .await 
+            .expect("Failed ot create DB");
+
+        
+        // Migrate DB 
+        let connection_pool = PgPool::connect(&config.conn_str)
+
+    connection_pool
+
+}
 
 #[actix_rt::test]
 async fn subscribe_returns_200_for_a_valid_form_data() {
