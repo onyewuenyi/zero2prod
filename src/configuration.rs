@@ -20,8 +20,8 @@ impl DatabaseSettings {
     }
     
     // conn string w/o DB name. Db name excluded to enable you to connect to the Postgres instance instead of a logical DB
-    pub fn conn_str_without_db(&self) -> String {
-        format!("postgres://{}:{}@{}:{}",self.uname, self.password, self.host, self.port)
+    pub fn default_db_conn(&self) -> String {
+        format!("postgres://{}:{}@{}:{}/postgres",self.uname, self.password, self.host, self.port)
     }    
 }
 pub fn get_configuration() -> Result<AppSettings, config::ConfigError> {

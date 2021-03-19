@@ -8,6 +8,7 @@ use uuid::Uuid;
 struct TestApp {
     pub address: String,
     pub db_pool: PgPool,
+    pub db_name: String,
 }
 
 // No .await call, therefore no need for `spawn_app` to be async now.
@@ -18,12 +19,8 @@ async fn spawn_app() -> TestApp {
 
    // set db name to be used in unit test to a uniq id
     config.database.database_name = Uuid::new_v4().to_string();
-
-    
- 
     let connection_pool = configure_database(&config.database).await;
-    
-    
+
     let local_host = "127.0.0.1";
     let listener = TcpListener::bind(format!("{}:0", local_host)).expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
@@ -35,28 +32,43 @@ async fn spawn_app() -> TestApp {
     // but we have no use for it here, hence the non-binding let 
     let _ = tokio::spawn(server);
     println!("Spawned app as background ps MF");
-    TestApp { address: address, db_pool: connection_pool}
+    TestApp { address: address, db_pool: connection_pool, db_name: config.database.database_name}
 }
 
+// TODO  See what happens if it is not pub. 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    // TODO NEXT TIME: refractor conn pool to a seperate configure_database
-    // Create DB
-
-    let mut connection = PgConnection::connect(&config.conn_str_without_db())
+    // Conn to Postgres server instance and create a new DB
+    let mut connection = PgConnection::connect(&config.default_db_conn())
         .await
-        .expect("Failed to connect to Postgres");
-    
-        connection
-            .execute(&*format!(r#"CREATE DATABASE "{};"#, config.database_name))
-            .await 
-            .expect("Failed ot create DB");
+        .expect("Failed to connect to Postgres using default_db_conn");
+    connection
+        .execute(&*format!(r#"CREATE DATABASE "{}";"#, config.database_name))
+        .await 
+        .expect("Failed to create DB");
 
-        
-        // Migrate DB 
-        let connection_pool = PgPool::connect(&config.conn_str)
+    // Conn to the new DB created and migrate DB 
+    let connection_pool = PgPool::connect(&config.conn_str())
+        .await
+        .expect("Failed to connect to Postgres using conn_str");
+    
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("Failed to migrate the DB");
 
     connection_pool
+}
 
+async fn teardown_test_db(config: &DatabaseSettings) {
+   // Conn to Postgres server instance and create a new DB
+   // Diff of using Pgconn vs PgPool here???
+    let mut connection = PgConnection::connect(&config.conn_str())
+        .await
+        .expect("Failed to connect to Postgres");
+    connection
+        .execute(&*format!(r#"DROP DATABASE "{};"#, config.database_name))
+        .await 
+        .expect("Failed to drop DB");    
 }
 
 #[actix_rt::test]
@@ -66,8 +78,6 @@ async fn subscribe_returns_200_for_a_valid_form_data() {
     
     // run server as background ps 
     let app = spawn_app().await;
-
-
 
     // init reqwest obj to send a client http req
     let route = format!("{}/subscriptions", &app.address);
@@ -92,16 +102,20 @@ async fn subscribe_returns_200_for_a_valid_form_data() {
         .fetch_one(&app.db_pool)
         .await
         .expect("Failed ot fetch saved subscription.");
-    
-        assert_eq!(saved.email, "senpai@gmaill.com");
+
+        assert_eq!(saved.email, "senpai@gmail.com");
         assert_eq!(saved.name, "charles senpai");
+
+    // app.db_pool
+    //     .execute(&*format!(r#"DROP DATABASE "{}";"#, app.db_name))
+    //     .await 
+    //     .expect("Failed to drop DB");   
 }
 
 #[actix_rt::test]
 async fn subscribe_returns_400_when_data_is_missing() {
     let app = spawn_app().await;
-    let address = app.address;
-    let route = format!("{}/subscriptions", &address);
+    let route = format!("{}/subscriptions", &app.address);
     let client = reqwest::Client::new();
 
     let test_cases = vec![
