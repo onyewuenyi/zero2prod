@@ -1,8 +1,10 @@
 use actix_web::{web, App, HttpServer};
 use actix_web::dev::Server;
+use actix_web::middleware::Logger;
 use std::net::TcpListener;
 use crate::routes::{health_check, subscribe};
 use sqlx::PgPool;
+
 
 
 pub fn run_actix_backend(listener: TcpListener, connection_pool: PgPool) -> Result<Server, std::io::Error> {
@@ -10,6 +12,9 @@ pub fn run_actix_backend(listener: TcpListener, connection_pool: PgPool) -> Resu
     let connection_pool = web::Data::new(connection_pool);
     let server = HttpServer::new(move || {
             App::new()
+                // Logger emit a log record for every incoming req 
+                // add middlewares in actix using wrap
+                .wrap(Logger::default())
                 // route, HTTP req method, route handler, route match guards 
                 .route("/health_check", web::get().to(health_check))
                 // TODO add subscriptions GET to enable DB test
