@@ -11,12 +11,7 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to connect to Postgres");
     
-    println!("LOG: {}", configuration.database.conn_str());
-
-    let address = format!("127.0.0.1:{}", configuration.app_port);
-    println!("LOG: <LocalHost>:<Port>: {}", address);
-
-    let listener = TcpListener::bind(address)?;
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", configuration.app_port))?;
     run_actix_backend(listener, connection_pool)?.await
 }
 

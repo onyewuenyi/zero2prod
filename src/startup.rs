@@ -5,9 +5,9 @@ use crate::routes::{health_check, subscribe};
 use sqlx::PgPool;
 
 
-pub fn run_actix_backend(listener: TcpListener, db_pool: PgPool) -> Result<Server, std::io::Error> {
-    // Wrap the pool using web::data, which evals to an Arch smart ptr
-    let db_pool = web::Data::new(db_pool);
+pub fn run_actix_backend(listener: TcpListener, connection_pool: PgPool) -> Result<Server, std::io::Error> {
+    // Wrap the pool using web::data, which evals to an Arch smart ptr; req for how actix works 
+    let connection_pool = web::Data::new(connection_pool);
     let server = HttpServer::new(move || {
             App::new()
                 // route, HTTP req method, route handler, route match guards 
@@ -15,7 +15,7 @@ pub fn run_actix_backend(listener: TcpListener, db_pool: PgPool) -> Result<Serve
                 // TODO add subscriptions GET to enable DB test
                 .route("/subscriptions", web::post().to(subscribe))
                 // Get a ptr cp and attach/register it to the app state 
-                .app_data(db_pool.clone())
+                .app_data(connection_pool.clone())
         })
         .listen(listener)?
         .run();
