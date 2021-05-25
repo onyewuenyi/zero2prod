@@ -12,7 +12,7 @@ pub fn run_actix_backend(listener: TcpListener, connection_pool: PgPool) -> Resu
     let connection_pool = web::Data::new(connection_pool);
     let server = HttpServer::new(move || {
             App::new()
-                // Logger emit a log record for every incoming req 
+                // Logger prints to stdout a log record for every incoming req 
                 // add middlewares in actix using wrap
                 .wrap(Logger::default())
                 // route, HTTP req method, route handler, route match guards 

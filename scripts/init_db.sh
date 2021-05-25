@@ -25,6 +25,14 @@ done
 
 >&2 echo "Postgres is up and running on port ${DB_PORT} - running migrations now!"
 
+
+# A new top-level directory should have now appeared in your project - migrations. This is where all migrations for our project will be stored by sqlx’s CLI.
+# Under migrations you should already have one file called {timestamp}_create_subscriptions_table.sql
+# - this is where we have to write the SQL code for our first migration
+# Assuming you used the default parameters to launch Postgres in Docker!
+# export DATABASE_URL=postgres://postgres:password@localhost:5432/newsletter 
+# sqlx migrate add create_subscriptions_table
+
 export DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}
 sqlx database create
 sqlx migrate run
