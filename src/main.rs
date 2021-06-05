@@ -8,8 +8,7 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use tracing_log::LogTracer;
 mod routes;
 
-#[actix_rt::main]
-async fn main() -> std::io::Result<()> {
+pub fn foo() {
     // Relative to tracing log, log does not emit tracing events out of the box and does not provide a feature flag to enable relative to tracing
     // Must explictly register a logger imp 
     // Redirect all log's events to our subscriber 
@@ -28,7 +27,12 @@ async fn main() -> std::io::Result<()> {
         .with(formatting_layer);
 
     set_global_default(subscriber).expect("Failed to set subscriber");
+}
 
+
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
+    foo();
     let configuration = get_configuration().expect("Failed to read configuration.");
     let connection_pool = PgPool::connect(&configuration.database.conn_str())
         .await
