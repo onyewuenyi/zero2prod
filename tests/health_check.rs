@@ -1,6 +1,7 @@
 use std::net::TcpListener;
 use zero2prod::startup::run_actix_backend;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 // if there is a type in .header("Content-Type", "application/x-www-form-urlencoded") it will fail with no debug hint
@@ -14,6 +15,9 @@ struct TestApp {
 // No .await call, therefore no need for `spawn_app` to be async now.
 // We are also running tests, so it is not worth it to propagate errors: // if we fail to perform the required setup we can just panic and crash // all the things.
 async fn spawn_app() -> TestApp {
+    let subscriber = get_subscriber("test".into(), "debug".into());
+    init_subscriber(subscriber);
+    
     // TODO spin up new DB with rand name
     let mut config = get_configuration().expect("Failed to read configuration.");
 
