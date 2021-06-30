@@ -4,19 +4,31 @@ use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
+
 // if there is a type in .header("Content-Type", "application/x-www-form-urlencoded") it will fail with no debug hint
 
-struct TestApp {
+// Ensure that the observability code, tracing code, `tracing` is only init once using `lazy static`
+lazy_static::lazy_static! {
+    static ref TRACING: () = {
+        let filter = if std::env::var("TEST_LOG").is_ok() { "debug" } else { "" };
+        let subscriber = get_subscriber("test".into(), "debug".into());
+        init_subscriber(subscriber);  
+    };  
+}
+
+
+pub struct TestApp {
     pub address: String,
     pub db_pool: PgPool,
     pub db_name: String,
 }
 
 // No .await call, therefore no need for `spawn_app` to be async now.
-// We are also running tests, so it is not worth it to propagate errors: // if we fail to perform the required setup we can just panic and crash // all the things.
+// We are also running tests, so it is not worth it to propagate errors: 
+// if we fail to perform the required setup we can just panic and crash // all the things.
 async fn spawn_app() -> TestApp {
-    let subscriber = get_subscriber("test".into(), "debug".into());
-    init_subscriber(subscriber);
+    // THe first time `initialize` is invoked the code in `TRACING` is ex. All other invocatinos will instead skip ex
+    lazy_static::initialize(&TRACING);
     
     // TODO spin up new DB with rand name
     let mut config = get_configuration().expect("Failed to read configuration.");

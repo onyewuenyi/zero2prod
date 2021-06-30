@@ -5,6 +5,10 @@ use tracing_log::LogTracer;
 use tracing::Subscriber;
 
 
+// env_logger == (feature-parity) tracing_subscriber::filter::EnvLogger, 
+// tracing_buyan_formatter::JsonStorageLayer, tracing_buyan_formatter::BunyanFormatterLayer
+
+
 /// Compose multiple layers into a `tracing`'s subscriber. ///
 /// # Implementation Notes
 ///
@@ -35,6 +39,9 @@ pub fn get_subscriber(name: String, env_filter: String) -> impl Subscriber + Sen
 /// 
 /// It should only be called once!
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
+    //  solves the prob of emitting actix-web log records by enabling log to emit tracing events to log's logger 
+    // we explictly register a logger imp to redirect the logs to our tracing subscriber for processing 
+    // this results in a failure when integration test calls this N times for each unit test.
     LogTracer::init().expect("Failed to set logger");
     set_global_default(subscriber).expect("Failed to set subscriber");
 }

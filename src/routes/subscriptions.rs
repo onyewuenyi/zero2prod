@@ -1,4 +1,3 @@
-
 use actix_web::{web, HttpResponse};
 use sqlx::PgPool;
 use chrono::Utc;
@@ -11,24 +10,54 @@ pub struct FormData {
     email: String
 }
 
+
+
+
+// Create a span at the beginning of the fn invocation
+// Attaches all args of the fn to the context of the span 
+// implictly get the request_id from TracingLogger in our macro fn annotation
+#[tracing::instrument(
+    name = "Adding new subscriber",
+    skip(form, pool)
+    fields(
+        request_id = %Uuid::new_v4(),
+        email = %form.email,
+        name = %form.name
+    )
+)]
 pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> Result<HttpResponse, HttpResponse>  {
-    // Choas that could occur: db conn down, query is slow do to N, network issues sending req to db in web server e.g. web server goes down
+    // Orchestrates the subscribe handler req flow and returns the response to the client 
+    // Description: handler for the POST /subscriptions endpoint. It is instrumented with logging and tracing. It takes the req form data (req encoded body) and makes a DB WR req
+    // TODO: verify the return: return 200 OK. If name or email is missing return 400 BAD REQUEST
 
-    // get name and email from the POST /subscribers req using application/x-www-fornm-urlencoded
-    // parse req encoded body of a POST REQ
-    // return 200 OK
-    // if name or email is missing return 400 BAD REQUEST
-    // conn to DB
+    // Chaos that could occur: db conn down, query is slow do to N, network issues sending req to db in web server e.g. web server goes down
+
+    // Telemetry data emited to stdout: EVENT is a log record and the the rest is the trace span of the entire subscribe flow
+    // {"v":0,"name":"test","msg":"[ADDDING A NEW SUBSCRIBER. - START]","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.619794300+00:00","target":"zero2prod::routes::subscriptions","line":25,"file":"src\\routes\\subscriptions.rs","request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
+    // {"v":0,"name":"test","msg":"[SAVING NEW SUBSCRIBER DETAILS IN THE DATABASE - START]","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.620094700+00:00","target":"zero2prod::routes::subscriptions","line":31,"file":"src\\routes\\subscriptions.rs","request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
+    // {"v":0,"name":"test","msg":"[SAVING NEW SUBSCRIBER DETAILS IN THE DATABASE - EVENT] /* SQLx ping */; rows: 0, elapsed: 1.079ms","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.621547400+00:00","target":"log","line":null,"file":null,"log.module_path":"sqlx::query","log.target":"sqlx::query","request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
+    // {"v":0,"name":"test","msg":"[SAVING NEW SUBSCRIBER DETAILS IN THE DATABASE - EVENT] INSERT INTO subscriptions (id, …; rows: 0, elapsed: 3.408ms\n\nINSERT INTO\n  subscriptions (id, email, name, subscribed_as)\nVALUES\n  ($1, $2, $3, $4)\n","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.626969100+00:00","target":"log","line":null,"file":null,"log.target":"sqlx::query","log.module_path":"sqlx::query","request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
+    // {"v":0,"name":"test","msg":"[SAVING NEW SUBSCRIBER DETAILS IN THE DATABASE - END]","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.627269100+00:00","target":"zero2prod::routes::subscriptions","line":31,"file":"src\\routes\\subscriptions.rs","elapsed_milliseconds":6,"request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
+    // {"v":0,"name":"test","msg":"[ADDDING A NEW SUBSCRIBER. - EVENT] request_id f0398779-f0ee-4dc9-9b95-6341a6159ac5 - New subscriber details have been saved","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.627667100+00:00","target":"zero2prod::routes::subscriptions","line":53,"file":"src\\routes\\subscriptions.rs","request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
+    // {"v":0,"name":"test","msg":"[ADDDING A NEW SUBSCRIBER. - END]","level":30,"hostname":"DESKTOP-SSM6UCG","pid":28644,"time":"2021-06-21T13:25:45.627858+00:00","target":"zero2prod::routes::subscriptions","line":25,"file":"src\\routes\\subscriptions.rs","elapsed_milliseconds":7,"request_id":"f0398779-f0ee-4dc9-9b95-6341a6159ac5","email":"senpai@gmail.com"}
     
-    let req_id = Uuid::new_v4();
-    // create and step into span 
-    let req_span = tracing::info_span!("Addding a new subscriber.", %req_id, email = %form.email, name = %form.name);
-    let _req_span_guard = req_span.enter();
+    insert_subscriber(&pool, &form)
+        .await
+        .map_err(|_| HttpResponse::InternalServerError().finish())?;
+    Ok(HttpResponse::Ok().finish())
+}
 
-    // tracing::info!("request_id {} - Database: {:?}", req_id, pool.get_ref());
-    // tracing::info!("request_id {} - Saving new subscriber in the database", req_id);
+// Handled by macros now: instrument(tracing::info_span!("<...>")) trace span for an async task 
+// attach instrumentation, then `.await` it 
+#[tracing::instrument(
+    name = "Saving new subscriber details in the database",
+    skip(form, pool)
+)]
+pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
+    // DB logic: try to make a DB WR req with the user email, name, cur date, and a uniq id
+    // Decouple from framework app code and abstract DB logic
 
-    let query_span = tracing::info_span!("Saving new subscriber details in the database");
+    // Dependencies: Query use Postgres syntax and Rust SQL toolkit format/calls 
     sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_as)
@@ -39,17 +68,12 @@ pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> Re
         form.name,
         Utc::now()
     )
-    // TODO refractor later - Rust lang
-    // conn = Arc<Arc<PgConnection>>
-    // conn.get_reg() = &Arc<PgConnection>
-    // <>.deref = &PgConnection
-    .execute(pool.get_ref())
-    .instrument(query_span)
+    .execute(pool)
     .await
     .map_err(|e| {
-        tracing::error!("request_id {} - Failed to execute query: {:?}", req_id, e);
-        HttpResponse::InternalServerError().finish()
+        // tracing::error!("request_id {} - Failed to execute query: {:?}", request_id, e);
+        tracing::error!("Failed to execute query: {:?}", e);
+        e
     })?;
-    tracing::info!("request_id {} - New subscriber details have been saved", req_id);
-    Ok(HttpResponse::Ok().finish())
+    Ok(())
 }
